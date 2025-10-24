@@ -14,7 +14,9 @@ config = context.config
 
 # Interpret the config file for Python logging.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # Provide `sys` in defaults so logging config expressions like (sys.stdout,) evaluate
+    # correctly when fileConfig eval()s handler args.
+    fileConfig(config.config_file_name, defaults={"sys": __import__("sys")})
 
 # add current working directory to path so `app` can be imported when running inside Docker
 sys.path.insert(0, os.getcwd())

@@ -11,7 +11,9 @@ COPY alembic ./alembic
 COPY docker-entrypoint.sh ./
 RUN chmod +x ./docker-entrypoint.sh
 
-COPY ./app /app
+## Copy application into a subfolder named `app` so the package name `app` is importable
+COPY ./app /app/app
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# run the app module under the `app` package
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
