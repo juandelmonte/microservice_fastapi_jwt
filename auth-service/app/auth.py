@@ -7,6 +7,7 @@ import jwt
 from fastapi import HTTPException
 from . import models, schemas
 import logging
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,8 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'secret')
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv('ACCESS_TOKEN_EXPIRE_MINUTES', '15'))
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv('REFRESH_TOKEN_EXPIRE_DAYS', '7'))
 pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 
 def create_user(db: Session, user: schemas.UserCreate):
@@ -47,5 +50,51 @@ def login(db: Session, username: str, password: str):
         return None
     if not ok:
         return None
-    token = jwt.encode({'sub': username}, SECRET_KEY, algorithm='HS256')
-    return token
+    
+    # Create access token (short-lived)
+    access_expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = jwt.encode(
+        {'sub': username, 'exp': access_expire, 'type': 'access'},
+        SECRET_KEY,
+        algorithm='HS256'
+    )
+    
+    # Create refresh token (long-lived)
+    refresh_expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    refresh_token = jwt.encode(
+        {'sub': username, 'exp': refresh_expire, 'type': 'refresh'},
+        SECRET_KEY,
+        algorithm='HS256'
+    )
+    
+    return {
+        'access_token': access_token,
+        'refresh_token': refresh_token,
+        'token_type': 'bearer',
+        'expires_in': ACCESS_TOKEN_EXPIRE_MINUTES * 60  # seconds
+    }
+
+def refresh_access_token(refresh_token: str):
+    try:
+        payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=['HS256'])
+        if payload.get('type') != 'refresh':
+            return None
+        username = payload.get('sub')
+        if not username:
+            return None
+        
+        # Create new access token
+        access_expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = jwt.encode(
+            {'sub': username, 'exp': access_expire, 'type': 'access'},
+            SECRET_KEY,
+            algorithm='HS256'
+        )
+        
+        return {
+            'access_token': access_token,
+            'token_type': 'bearer',
+            'expires_in': ACCESS_TOKEN_EXPIRE_MINUTES * 60  # seconds
+        }
+    except Exception:
+        return None
